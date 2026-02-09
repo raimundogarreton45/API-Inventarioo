@@ -1,0 +1,39 @@
+# Framework web (versiones compatibles con Railway)
+fastapi==0.104.1
+uvicorn==0.24.0
+
+# Base de datos
+sqlalchemy==2.0.23
+psycopg2-binary==2.9.9
+alembic==1.12.1
+
+# Validación de datos
+pydantic==2.5.0
+pydantic-settings==2.1.0
+email-validator==2.1.0
+
+# Seguridad
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+python-multipart==0.0.6
+
+# Variables de entorno
+python-dotenv==1.0.0
+
+# Email (Resend - mejor alternativa gratis que SendGrid)
+resend==0.8.0
+
+# Utilidades
+python-dateutil==2.8.2
+
+# Excel y Google Sheets
+pandas==2.1.3
+openpyxl==3.1.2
+xlrd==2.0.1
+google-auth==2.25.2
+google-auth-oauthlib==1.2.0
+google-auth-httplib2==0.2.0
+google-api-python-client==2.111.0
+
+# Requests para integraciones
+requests==2.31.0
