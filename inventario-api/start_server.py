@@ -1,3 +1,9 @@
+from dotenv import load_dotenv
+
+# Carga el archivo .env en las variables de entorno
+load_dotenv()
+
+
 #!/usr/bin/env python
 """
 Script para iniciar el servidor de desarrollo.
