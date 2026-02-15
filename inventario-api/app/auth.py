@@ -35,7 +35,8 @@ settings = get_settings()
 
 # CryptContext maneja el "hash" de contraseñas con bcrypt
 # bcrypt es un algoritmo muy seguro para encriptar contraseñas
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
+
 
 
 # ============================================
