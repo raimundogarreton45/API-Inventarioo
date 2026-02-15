@@ -9,7 +9,7 @@ ENDPOINTS:
 - GET /auth/me         → Obtener perfil del usuario actual
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Body
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 
@@ -31,8 +31,15 @@ router = APIRouter(
 )
 
 
-# ============================================
-# REGISTRAR NUEVO USUARIO
+@router.post("/test-register", status_code=200)
+def test_register():
+    """Endpoint de prueba sin base de datos"""
+    return {
+        "status": "success",
+        "message": "Test endpoint working - DB will be ready soon"
+    }
+
+
 # ============================================
 
 @router.post(
@@ -56,7 +63,7 @@ router = APIRouter(
     """
 )
 def registrar_usuario(
-    user_data: UserCreate,
+    user_data: UserCreate = Body(...),
     db: Session = Depends(get_db)
 ):
     """
@@ -110,22 +117,10 @@ def registrar_usuario(
     - access_token: Token JWT para usar en peticiones posteriores
     - token_type: Siempre es "bearer"
     - user: Datos del usuario autenticado
-    
-    **Uso del token:**
-    Incluye el token en el header Authorization de tus peticiones:
-    ```
-    Authorization: Bearer {access_token}
-    ```
-    
-    **Alternativa: Usar API Key**
-    También puedes autenticarte con tu API Key:
-    ```
-    Authorization: Bearer {api_key}
-    ```
     """
 )
 def iniciar_sesion(
-    credentials: UserLogin,
+    credentials: UserLogin = Body(...),
     db: Session = Depends(get_db)
 ):
     """
@@ -186,6 +181,45 @@ def obtener_mi_perfil(
     El usuario se obtiene automáticamente del token JWT o API Key.
     """
     return current_user
+
+
+# ============================================
+# ENDPOINT DE TEST - VERIFICAR RECARGA
+# ============================================
+
+@router.post(
+    "/login-test-json",
+    summary="Test Login con JSON",
+    description="Endpoint de prueba para verificar que FastAPI recarguó los cambios"
+)
+def login_test_json(
+    credentials: UserLogin = Body(...),
+    db: Session = Depends(get_db)
+):
+    """
+    Endpoint de test que prueba Body.
+    """
+    return {
+        "message": "✅ FastAPI recargó los cambios y Body() funciona!",
+        "email": credentials.email,
+        "password_length": len(credentials.password)
+    }
+
+
+# ============================================
+# ENDPOINT DE TEST - VIEJO
+# ============================================
+
+@router.get(
+    "/healthcheck",
+    summary="Health Check",
+    description="Verifica que el servidor esté activo"
+)
+def healthcheck():
+    """
+    Simple health check.
+    """
+    return {"status": "ok", "message": "API activa"}
 
 
 # ============================================

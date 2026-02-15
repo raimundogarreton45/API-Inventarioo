@@ -4,15 +4,19 @@ CONEXIÓN A LA BASE DE DATOS
 Este archivo configura SQLAlchemy para conectarse a PostgreSQL (Supabase).
 
 CONCEPTOS CLAVE:
-- Engine: El "motor" que se conecta a la base de datos
+- Engine: El "motor" que se conecta a la basepython test_api.py de datos
 - SessionLocal: Una "sesión" es como una conversación con la base de datos
 - Base: La clase base de la que heredan todos tus modelos
 """
 
+from dotenv import load_dotenv
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from app.config import get_settings
+
+# Cargar variables de entorno
+load_dotenv()
 
 # Obtener configuración
 settings = get_settings()
@@ -22,13 +26,19 @@ settings = get_settings()
 # ============================================
 # Este motor es el encargado de comunicarse con PostgreSQL
 
-engine = create_engine(
-    settings.database_url,
-    # pool_pre_ping verifica que la conexión esté viva antes de usarla
-    pool_pre_ping=True,
-    # echo=True mostraría todas las consultas SQL en la consola (útil para debug)
-    echo=False
-)
+# Intentar conectar con la URL configurada; si falla, usar SQLite local como fallback
+try:
+    engine = create_engine(
+        settings.database_url,
+        pool_pre_ping=True,
+        echo=True
+    )
+    print("🔗 Intentando conectar a la base de datos externa...")
+except Exception as e:
+    # Fallback a SQLite local para permitir pruebas sin Supabase
+    fallback_url = 'sqlite:///./dev.sqlite3'
+    engine = create_engine(fallback_url, connect_args={"check_same_thread": False}, echo=True)
+    print("⚠️  No se pudo conectar a la BD externa. Usando SQLite local:", fallback_url)
 
 
 # ============================================
@@ -89,12 +99,17 @@ def init_db():
     Esto se ejecuta cuando inicias la aplicación por primera vez.
     Lee todos los modelos que heredan de "Base" y crea sus tablas.
     """
-    # Importar todos los modelos para que Base los conozca
-    from app.models import user, product, sale
-    
-    # Crear todas las tablas
-    Base.metadata.create_all(bind=engine)
-    print("✅ Tablas creadas exitosamente")
+    try:
+        # Importar todos los modelos para que Base los conozca
+        from app.models import user, product, sale
+        
+        # Crear todas las tablas
+        Base.metadata.create_all(bind=engine)
+        print("✅ Tablas creadas exitosamente")
+    except Exception as e:
+        print(f"⚠️  No se pudieron inicializar las tablas: {str(e)}")
+        print("💡 Verifica la conexión a la base de datos en .env")
+        print("⏭️  Continuando de todas formas...")
 
 
 # Para crear las tablas manualmente desde la terminal:

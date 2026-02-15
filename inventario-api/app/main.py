@@ -38,12 +38,25 @@ async def lifespan(app: FastAPI):
     Startup: Inicializa las tablas de la base de datos
     Shutdown: Limpia recursos si es necesario
     """
+    import asyncio
+    import threading
+    
     # STARTUP: Se ejecuta al iniciar
     print("🚀 Iniciando API de Inventario...")
     print(f"📝 Entorno: {settings.environment}")
+    print("📡 Intentando conectar a la base de datos...")
     
-    # Crear tablas en la base de datos
-    init_db()
+    # NO ESPERAR POR INIT_DB - SOLO INTENTAR EN BACKGROUND
+    def init_db_background():
+        try:
+            init_db()
+            print("✅ Base de datos conectada correctamente")
+        except Exception as e:
+            print("⚠️  Base de datos no disponible:", str(e)[:100])
+    
+    # Ejecutar init_db en un thread daemon (no bloquea startup)
+    db_thread = threading.Thread(target=init_db_background, daemon=True)
+    db_thread.start()
     
     print("✅ API lista para recibir peticiones")
     print("📖 Documentación disponible en: http://localhost:8000/docs")
@@ -111,9 +124,12 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
+        "http://localhost:8001",  # Frontend en desarrollo (IMPORTANTE para inventario-web)
         "http://localhost:3000",  # React/Next.js en desarrollo
         "http://localhost:5173",  # Vite en desarrollo
+        "http://localhost:8000",  # El mismo servidor (para testing)
         "https://tu-dominio.cl",  # Tu dominio en producción
+        "*",  # NOTA: En producción, especifica dominios exactos
     ],
     allow_credentials=True,
     allow_methods=["*"],  # Permite todos los métodos (GET, POST, PUT, DELETE)
