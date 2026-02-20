@@ -1,86 +1,97 @@
-"""
-SERVICIO: ALERTAS POR EMAIL CON RESEND
+# ═══════════════════════════════════════════════════════════
 
-Envía emails usando Resend (3,000 emails gratis/mes).
-Resend es más simple y generoso que SendGrid.
-"""
+# ARCHIVO: app/services/alert_service.py
 
+# ARREGLADO: Siempre envía a ALERT_EMAIL, no al email del usuario
+
+# ═══════════════════════════════════════════════════════════
+
+import os
 import resend
-from app.config import get_settings
-import logging
+from app.models.product import Product
+from app.models.user import User
+from sqlalchemy.orm import Session
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+# Configurar Resend
 
-settings = get_settings()
-resend.api_key = settings.resend_api_key
+resend.api_key = os.getenv(“RESEND_API_KEY”)
 
+RESEND_FROM_EMAIL = os.getenv(“RESEND_FROM_EMAIL”, “onboarding@resend.dev”)
+ALERT_EMAIL = os.getenv(“ALERT_EMAIL”)  # Email donde llegan las alertas
 
-def enviar_alerta_stock_bajo(
-    email_destino: str,
-    producto_nombre: str,
-    sku: str,
-    stock_actual: int,
-    stock_minimo: int
-) -> bool:
-    """Envía un email de alerta cuando un producto tiene stock bajo."""
-    
-    asunto = f"⚠️ Alerta: Stock Bajo - {producto_nombre}"
-    
-    contenido_html = f"""
-    <html>
-        <body style="font-family: Arial, sans-serif; color: #333;">
-            <div style="max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 10px;">
-                <h2 style="color: #d9534f;">⚠️ Alerta de Stock Bajo</h2>
-                <p>Hola,</p>
-                <p>Tu producto ha alcanzado el stock mínimo:</p>
-                <div style="background-color: #f8f9fa; padding: 15px; border-left: 4px solid #d9534f; margin: 20px 0;">
-                    <p><strong>Producto:</strong> {producto_nombre}</p>
-                    <p><strong>SKU:</strong> {sku}</p>
-                    <p><strong>Stock Actual:</strong> <span style="color: #d9534f; font-size: 18px;">{stock_actual}</span> unidades</p>
-                    <p><strong>Stock Mínimo:</strong> {stock_minimo} unidades</p>
-                </div>
-                <p>Te recomendamos reabastecer este producto lo antes posible.</p>
-                <hr style="border: none; border-top: 1px solid #ddd; margin: 20px 0;">
-                <p style="font-size: 12px; color: #777;">
-                    Este es un mensaje automático de tu sistema de inventario.
-                </p>
-            </div>
-        </body>
-    </html>
+async def check_and_send_alerts(producto: Product, user: User, db: Session):
+“””
+Verifica si un producto está bajo en stock y envía alerta.
+SIEMPRE envía al ALERT_EMAIL configurado en Railway.
+“””
+
+```
+# Si no hay ALERT_EMAIL configurado, no enviar
+if not ALERT_EMAIL:
+    print("⚠️ ALERT_EMAIL no configurado, no se enviarán alertas")
+    return
+
+# Si el producto ya no existe, salir
+if not producto:
+    return
+
+# Verificar si el stock está bajo
+stock_critico = producto.stock_actual < (producto.stock_minimo * 0.5)
+stock_bajo = producto.stock_actual <= producto.stock_minimo
+
+if not (stock_critico or stock_bajo):
+    # Stock OK, resetear flag de alerta
+    producto.alerta_enviada = False
+    db.commit()
+    return
+
+# Si ya se envió alerta, no enviar de nuevo
+if producto.alerta_enviada:
+    return
+
+# Determinar tipo de alerta
+if stock_critico:
+    asunto = f"🚨 STOCK CRÍTICO: {producto.nombre}"
+    mensaje = f"""
+    <h2>⚠️ Alerta de Stock Crítico</h2>
+    <p>El producto <strong>{producto.nombre}</strong> tiene stock crítico.</p>
+    <ul>
+        <li><strong>SKU:</strong> {producto.sku}</li>
+        <li><strong>Stock actual:</strong> {producto.stock_actual} unidades</li>
+        <li><strong>Stock mínimo:</strong> {producto.stock_minimo} unidades</li>
+    </ul>
+    <p style="color: red; font-weight: bold;">⚠️ Es urgente reponer este producto.</p>
+    <p>Usuario: {user.nombre} ({user.email})</p>
     """
-    
-    try:
-        params = {
-            "from": settings.resend_from_email,
-            "to": [email_destino],
-            "subject": asunto,
-            "html": contenido_html,
-        }
-        
-        resend.Emails.send(params)
-        logger.info(f"✅ Alerta enviada a {email_destino} para producto {sku}")
-        return True
-    
-    except Exception as e:
-        logger.error(f"❌ Error al enviar email: {str(e)}")
-        return False
+else:
+    asunto = f"⚠️ Stock Bajo: {producto.nombre}"
+    mensaje = f"""
+    <h2>📦 Alerta de Stock Bajo</h2>
+    <p>El producto <strong>{producto.nombre}</strong> está llegando al stock mínimo.</p>
+    <ul>
+        <li><strong>SKU:</strong> {producto.sku}</li>
+        <li><strong>Stock actual:</strong> {producto.stock_actual} unidades</li>
+        <li><strong>Stock mínimo:</strong> {producto.stock_minimo} unidades</li>
+    </ul>
+    <p>Considera reponer pronto este producto.</p>
+    <p>Usuario: {user.nombre} ({user.email})</p>
+    """
 
-
-def probar_envio_email(email_destino: str) -> bool:
-    """Prueba que Resend está configurado correctamente."""
-    try:
-        params = {
-            "from": settings.resend_from_email,
-            "to": [email_destino],
-            "subject": "Prueba de Sistema de Inventario",
-            "html": "<p>Este es un email de prueba. Tu sistema está configurado correctamente. ✅</p>",
-        }
-        
-        resend.Emails.send(params)
-        logger.info(f"✅ Email de prueba enviado a {email_destino}")
-        return True
+# Enviar email
+try:
+    resend.Emails.send({
+        "from": RESEND_FROM_EMAIL,
+        "to": ALERT_EMAIL,  # SIEMPRE enviar a este email
+        "subject": asunto,
+        "html": mensaje
+    })
     
-    except Exception as e:
-        logger.error(f"❌ Error en prueba: {str(e)}")
-        return False
+    # Marcar como enviada
+    producto.alerta_enviada = True
+    db.commit()
+    
+    print(f"✅ Alerta enviada para {producto.sku} a {ALERT_EMAIL}")
+    
+except Exception as e:
+    print(f"❌ Error al enviar email: {str(e)}")
+```
