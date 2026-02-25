@@ -2,7 +2,7 @@
 
 # ARCHIVO: app/services/alert_service.py
 
-# ARREGLADO: Siempre envía a ALERT_EMAIL, no al email del usuario
+# ARREGLADO: Comillas normales (sin tipográficas)
 
 # ═══════════════════════════════════════════════════════════
 
@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 resend.api_key = os.getenv(“RESEND_API_KEY”)
 
 RESEND_FROM_EMAIL = os.getenv(“RESEND_FROM_EMAIL”, “onboarding@resend.dev”)
-ALERT_EMAIL = os.getenv(“ALERT_EMAIL”)  # Email donde llegan las alertas
+ALERT_EMAIL = os.getenv(“ALERT_EMAIL”)
 
 async def check_and_send_alerts(producto: Product, user: User, db: Session):
 “””
@@ -81,7 +81,7 @@ else:
 try:
     resend.Emails.send({
         "from": RESEND_FROM_EMAIL,
-        "to": ALERT_EMAIL,  # SIEMPRE enviar a este email
+        "to": ALERT_EMAIL,
         "subject": asunto,
         "html": mensaje
     })
