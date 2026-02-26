@@ -119,8 +119,10 @@ def registrar_venta(db: Session, venta_data: SaleCreate, usuario: User) -> tuple
     
     if producto.necesita_alerta():
         # Enviar alerta por email
-        exito = enviar_alerta_stock_bajo(
-            email_destino=usuario.email,
+        exito = await enviar_alerta_stock_bajo(
+         producto=producto,
+         user=user,
+          db=db,
             producto_nombre=producto.nombre,
             sku=producto.sku,
             stock_actual=producto.stock_actual,
