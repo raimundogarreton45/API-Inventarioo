@@ -14,10 +14,10 @@ from sqlalchemy.orm import Session
 
 # Configurar Resend
 
-resend.api_key = os.getenv(“RESEND_API_KEY”)
+resend.api_key = os.getenv("RESEND_API_KEY")
 
-RESEND_FROM_EMAIL = os.getenv(“RESEND_FROM_EMAIL”, “onboarding@resend.dev”)
-ALERT_EMAIL = os.getenv(“ALERT_EMAIL”)
+RESEND_FROM_EMAIL = os.getenv("RESEND_FROM_EMAIL", "onboarding@resend.dev")
+ALERT_EMAIL = os.getenv("ALERT_EMAIL")
 
 async def check_and_send_alerts(producto: Product, user: User, db: Session):
 “””
