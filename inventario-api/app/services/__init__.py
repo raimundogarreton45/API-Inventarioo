@@ -19,8 +19,7 @@ from app.services.sale_service import (
 )
 
 from app.services.alert_service import (
-    enviar_alerta_stock_bajo,
-    probar_envio_email
+    enviar_alerta_stock_bajo
 )
 
 __all__ = [
@@ -38,5 +37,4 @@ __all__ = [
     "obtener_estadisticas_ventas",
     # Alert services
     "enviar_alerta_stock_bajo",
-    "probar_envio_email",
 ]
