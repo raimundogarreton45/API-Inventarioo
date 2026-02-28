@@ -19,6 +19,7 @@ from app.models import Sale, Product, User
 from app.schemas import SaleCreate
 from app.services.alert_service import enviar_alerta_stock_bajo
 import logging
+import asyncio
 
 logger = logging.getLogger(__name__)
 
@@ -118,23 +119,15 @@ def registrar_venta(db: Session, venta_data: SaleCreate, usuario: User) -> tuple
     alerta_enviada = False
     
     if producto.necesita_alerta():
-        # Enviar alerta por email
-        exito = await enviar_alerta_stock_bajo(
-         producto=producto,
-         user=user,
-          db=db,
-            producto_nombre=producto.nombre,
-            sku=producto.sku,
-            stock_actual=producto.stock_actual,
-            stock_minimo=producto.stock_minimo
+        # Programar envío de alerta (función async) en background
+        asyncio.create_task(
+            enviar_alerta_stock_bajo(producto=producto, user=usuario, db=db)
         )
-        
-        if exito:
-            producto.alerta_enviada = True
-            alerta_enviada = True
-            logger.warning(
-                f"⚠️ Stock de {producto.sku} bajo mínimo. Alerta enviada a {usuario.email}"
-            )
+        producto.alerta_enviada = True
+        alerta_enviada = True
+        logger.warning(
+            f"⚠️ Stock de {producto.sku} bajo mínimo. Alerta programada a {usuario.email}"
+        )
     
     
     # ============================================

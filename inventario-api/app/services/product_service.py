@@ -18,6 +18,7 @@ from app.models import Product, User
 from app.schemas import ProductCreate, ProductUpdate, StockUpdate
 from app.services.alert_service import enviar_alerta_stock_bajo
 import logging
+import asyncio
 
 logger = logging.getLogger(__name__)
 
@@ -203,15 +204,12 @@ def actualizar_stock(
     
     # Si el stock está bajo Y no se ha enviado alerta, enviarla
     elif producto.necesita_alerta():
-        enviar_alerta_stock_bajo(
-            email_destino=usuario.email,
-            producto_nombre=producto.nombre,
-            sku=producto.sku,
-            stock_actual=producto.stock_actual,
-            stock_minimo=producto.stock_minimo
+        # Programar envío de alerta (función async) en background
+        asyncio.create_task(
+            enviar_alerta_stock_bajo(producto=producto, user=usuario, db=db)
         )
         producto.alerta_enviada = True
-        logger.warning(f"⚠️ Stock bajo en {producto.sku}. Alerta enviada.")
+        logger.warning(f"⚠️ Stock bajo en {producto.sku}. Alerta programada.")
     
     db.commit()
     db.refresh(producto)
