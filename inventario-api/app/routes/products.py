@@ -279,12 +279,14 @@ def reponer_stock_producto(
         f"📦 Stock de {producto.sku} repuesto: {stock_anterior} → {producto.stock_actual} (+{cantidad})"
     )
     
+    # ✅ RETORNAR CON TODOS LOS CAMPOS REQUERIDOS
     return {
         "id": producto.id,
         "nombre": producto.nombre,
         "sku": producto.sku,
         "stock_actual": producto.stock_actual,
         "stock_minimo": producto.stock_minimo,
+        "usuario_id": producto.usuario_id,  # ✅ ESTO FALTABA
         "alerta_enviada": producto.alerta_enviada,
         "created_at": producto.created_at,
         "updated_at": producto.updated_at
@@ -333,15 +335,15 @@ def eliminar_producto_endpoint(
             detail=f"Producto {producto_id} no encontrado"
         )
     
-    # Desvincular ventas (establecer producto_id a NULL en lugar de eliminarlas)
-    ventas_asociadas = db.query(Sale).filter(Sale.producto_id == producto_id).all()
+    # ✅ DESVINCULAR VENTAS EN UNA SOLA OPERACIÓN
+    num_ventas = db.query(Sale).filter(Sale.producto_id == producto_id).update(
+        {"producto_id": None},
+        synchronize_session=False
+    )
     
-    if ventas_asociadas:
-        for venta in ventas_asociadas:
-            venta.producto_id = None
-        
+    if num_ventas > 0:
         logger.warning(
-            f"🔗 {len(ventas_asociadas)} ventas desvinculadas del producto {producto.sku}"
+            f"🔗 {num_ventas} ventas desvinculadas del producto {producto.sku}"
         )
     
     # Eliminar el producto
