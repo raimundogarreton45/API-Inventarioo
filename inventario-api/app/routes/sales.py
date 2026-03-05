@@ -63,7 +63,7 @@ router = APIRouter(
     **Requiere autenticación.**
     """
 )
-def registrar_nueva_venta(
+async def registrar_nueva_venta(
     venta: SaleCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -74,7 +74,7 @@ def registrar_nueva_venta(
     Descuenta automáticamente el stock y envía alertas si es necesario.
     """
     # Registrar la venta (el servicio maneja toda la lógica)
-    venta_registrada, alerta_enviada = registrar_venta(db, venta, current_user)
+    venta_registrada, alerta_enviada = await registrar_venta(db, venta, current_user)
     
     # Construir el mensaje de respuesta
     if alerta_enviada:
