@@ -63,7 +63,7 @@ router = APIRouter(
     **Requiere autenticación.**
     """
 )
-def registrar_nueva_venta(
+async def registrar_nueva_venta(
     venta: SaleCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
