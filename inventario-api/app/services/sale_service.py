@@ -24,7 +24,7 @@ import asyncio
 logger = logging.getLogger(__name__)
 
 
-def registrar_venta(db: Session, venta_data: SaleCreate, usuario: User) -> tuple[Sale, bool]:
+async def registrar_venta(db: Session, venta: SaleCreate, user: User):
     """
     Registra una nueva venta y descuenta el stock automáticamente.
     
@@ -38,8 +38,8 @@ def registrar_venta(db: Session, venta_data: SaleCreate, usuario: User) -> tuple
     
     Args:
         db: Sesión de base de datos
-        venta_data: Datos de la venta (producto_id, cantidad)
-        usuario: Usuario actual
+        venta: Datos de la venta (producto_id, cantidad)
+        user: Usuario actual
     
     Retorna:
         tuple: (Sale, alerta_enviada)
@@ -56,13 +56,13 @@ def registrar_venta(db: Session, venta_data: SaleCreate, usuario: User) -> tuple
     # ============================================
     
     producto = db.query(Product).filter(
-        Product.id == venta_data.producto_id
+        Product.id == venta.producto_id
     ).first()
     
     if not producto:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Producto {venta_data.producto_id} no encontrado"
+            detail=f"Producto {venta.producto_id} no encontrado"
         )
     
     
@@ -70,7 +70,7 @@ def registrar_venta(db: Session, venta_data: SaleCreate, usuario: User) -> tuple
     # 2. VERIFICAR QUE PERTENECE AL USUARIO
     # ============================================
     
-    if producto.usuario_id != usuario.id:
+    if producto.usuario_id != user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="No tienes permiso para vender este producto"
@@ -81,10 +81,10 @@ def registrar_venta(db: Session, venta_data: SaleCreate, usuario: User) -> tuple
     # 3. VERIFICAR STOCK SUFICIENTE
     # ============================================
     
-    if not producto.puede_vender(venta_data.cantidad):
+    if not producto.puede_vender(venta.cantidad):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Stock insuficiente. Disponible: {producto.stock_actual}, Solicitado: {venta_data.cantidad}"
+            detail=f"Stock insuficiente. Disponible: {producto.stock_actual}, Solicitado: {venta.cantidad}"
         )
     
     
@@ -93,7 +93,7 @@ def registrar_venta(db: Session, venta_data: SaleCreate, usuario: User) -> tuple
     # ============================================
     
     stock_anterior = producto.stock_actual
-    producto.stock_actual -= venta_data.cantidad
+    producto.stock_actual -= venta.cantidad
     
     logger.info(
         f"📉 Stock de {producto.sku} descontado: {stock_anterior} → {producto.stock_actual}"
@@ -106,7 +106,7 @@ def registrar_venta(db: Session, venta_data: SaleCreate, usuario: User) -> tuple
     
     nueva_venta = Sale(
         producto_id=producto.id,
-        cantidad=venta_data.cantidad
+        cantidad=venta.cantidad
     )
     
     db.add(nueva_venta)
@@ -119,14 +119,16 @@ def registrar_venta(db: Session, venta_data: SaleCreate, usuario: User) -> tuple
     alerta_enviada = False
     
     if producto.necesita_alerta():
-        # Programar envío de alerta (función async) en background
-        asyncio.create_task(
-            enviar_alerta_stock_bajo(producto=producto, user=usuario, db=db)
+        # Enviar alerta (función async)
+        await enviar_alerta_stock_bajo(
+            producto=producto,
+            user=user,
+            db=db
         )
         producto.alerta_enviada = True
         alerta_enviada = True
         logger.warning(
-            f"⚠️ Stock de {producto.sku} bajo mínimo. Alerta programada a {usuario.email}"
+            f"⚠️ Stock de {producto.sku} bajo mínimo. Alerta programada a {user.email}"
         )
     
     
@@ -139,7 +141,7 @@ def registrar_venta(db: Session, venta_data: SaleCreate, usuario: User) -> tuple
     db.refresh(producto)
     
     logger.info(
-        f"✅ Venta registrada: {venta_data.cantidad} unidades de {producto.sku}"
+        f"✅ Venta registrada: {venta.cantidad} unidades de {producto.sku}"
     )
     
     return nueva_venta, alerta_enviada
