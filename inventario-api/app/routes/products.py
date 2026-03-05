@@ -9,16 +9,18 @@ ENDPOINTS:
 - GET /products/{id}      → Obtener un producto
 - PUT /products/{id}      → Actualizar producto
 - PUT /products/{id}/stock → Actualizar solo el stock
+- PATCH /products/{id}/reponer → Reponer stock (sumar cantidad)
 - DELETE /products/{id}   → Eliminar producto
 """
 
-from fastapi import APIRouter, Depends, status, Query
+from fastapi import APIRouter, Depends, status, Query, HTTPException
 from sqlalchemy.orm import Session
 from typing import Optional
+import logging
 
 from app.database import get_db
 from app.auth import get_current_user
-from app.models import User
+from app.models import User, Product, Sale
 from app.schemas import (
     ProductCreate, 
     ProductUpdate, 
@@ -34,6 +36,8 @@ from app.services import (
     actualizar_stock,
     eliminar_producto
 )
+
+logger = logging.getLogger(__name__)
 
 # Crear el router
 router = APIRouter(
@@ -215,7 +219,80 @@ def actualizar_stock_producto(
 
 
 # ============================================
-# ELIMINAR PRODUCTO
+# REPONER STOCK (SUMAR CANTIDAD)
+# ============================================
+
+@router.patch(
+    "/{producto_id}/reponer",
+    response_model=ProductResponse,
+    summary="Reponer stock de un producto",
+    description="""
+    Suma una cantidad al stock actual del producto.
+    
+    **Diferencia con PUT /stock:**
+    - PUT /stock: Reemplaza el stock con un nuevo valor
+    - PATCH /reponer: Suma una cantidad al stock actual
+    
+    **Ejemplo:**
+    Si el producto tiene 5 unidades y envías cantidad=10,
+    el stock quedará en 15 unidades.
+    
+    **Requiere autenticación.**
+    Solo se puede reponer stock de productos propios.
+    """
+)
+def reponer_stock_producto(
+    producto_id: int,
+    cantidad: int = Query(..., ge=1, description="Cantidad a reponer (debe ser positiva)"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Endpoint para reponer stock de un producto.
+    
+    Suma la cantidad especificada al stock actual.
+    """
+    # Buscar el producto
+    producto = db.query(Product).filter(
+        Product.id == producto_id,
+        Product.usuario_id == current_user.id
+    ).first()
+    
+    if not producto:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Producto {producto_id} no encontrado"
+        )
+    
+    # Reponer stock (sumar)
+    stock_anterior = producto.stock_actual
+    producto.stock_actual += cantidad
+    
+    # Si el stock vuelve a estar sobre el mínimo, resetear la alerta
+    if producto.stock_actual >= producto.stock_minimo:
+        producto.alerta_enviada = False
+    
+    db.commit()
+    db.refresh(producto)
+    
+    logger.info(
+        f"📦 Stock de {producto.sku} repuesto: {stock_anterior} → {producto.stock_actual} (+{cantidad})"
+    )
+    
+    return {
+        "id": producto.id,
+        "nombre": producto.nombre,
+        "sku": producto.sku,
+        "stock_actual": producto.stock_actual,
+        "stock_minimo": producto.stock_minimo,
+        "alerta_enviada": producto.alerta_enviada,
+        "created_at": producto.created_at,
+        "updated_at": producto.updated_at
+    }
+
+
+# ============================================
+# ELIMINAR PRODUCTO (CON MANEJO DE VENTAS)
 # ============================================
 
 @router.delete(
@@ -224,6 +301,9 @@ def actualizar_stock_producto(
     summary="Eliminar un producto",
     description="""
     Elimina un producto del inventario.
+    
+    Si el producto tiene ventas asociadas, estas se desvinculan
+    automáticamente antes de eliminar el producto.
     
     ⚠️ **ADVERTENCIA:** Esta acción no se puede deshacer.
     
@@ -238,6 +318,36 @@ def eliminar_producto_endpoint(
 ):
     """
     Endpoint para eliminar un producto.
+    
+    Maneja la eliminación de ventas asociadas automáticamente.
     """
-    eliminar_producto(db, producto_id, current_user)
+    # Buscar el producto
+    producto = db.query(Product).filter(
+        Product.id == producto_id,
+        Product.usuario_id == current_user.id
+    ).first()
+    
+    if not producto:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Producto {producto_id} no encontrado"
+        )
+    
+    # Desvincular ventas (establecer producto_id a NULL en lugar de eliminarlas)
+    ventas_asociadas = db.query(Sale).filter(Sale.producto_id == producto_id).all()
+    
+    if ventas_asociadas:
+        for venta in ventas_asociadas:
+            venta.producto_id = None
+        
+        logger.warning(
+            f"🔗 {len(ventas_asociadas)} ventas desvinculadas del producto {producto.sku}"
+        )
+    
+    # Eliminar el producto
+    db.delete(producto)
+    db.commit()
+    
+    logger.info(f"🗑️ Producto {producto.sku} eliminado por {current_user.email}")
+    
     return None  # 204 No Content no devuelve body
