@@ -24,7 +24,7 @@ import asyncio
 logger = logging.getLogger(__name__)
 
 
-def registrar_venta(db: Session, venta_data: SaleCreate, usuario: User) -> tuple[Sale, bool]:
+async def registrar_venta(db: Session, venta: SaleCreate, user: User):
     """
     Registra una nueva venta y descuenta el stock automáticamente.
     
@@ -120,8 +120,10 @@ def registrar_venta(db: Session, venta_data: SaleCreate, usuario: User) -> tuple
     
     if producto.necesita_alerta():
         # Programar envío de alerta (función async) en background
-        asyncio.create_task(
-            enviar_alerta_stock_bajo(producto=producto, user=usuario, db=db)
+        await enviar_alerta_stock_bajo(
+        producto=producto,
+        user=user,
+        db=db
         )
         producto.alerta_enviada = True
         alerta_enviada = True
